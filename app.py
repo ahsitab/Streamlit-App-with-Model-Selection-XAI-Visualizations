@@ -64,13 +64,41 @@ def generate_grad_cam(model, image_tensor, target_layer):
     return attributions
 
 def generate_lime_explanation(model, image, top_class):
+    # Convert PIL image to numpy array
+    image_np = np.array(image)
+    
+    # Define prediction function for LIME
+    def batch_predict(images):
+        model.eval()
+        batch = torch.stack([
+            preprocess_image(Image.fromarray(image)).squeeze(0)
+            for image in images
+        ])
+        device = next(model.parameters()).device
+        batch = batch.to(device)
+        
+        with torch.no_grad():
+            logits = model(batch)
+            probs = torch.nn.functional.softmax(logits, dim=1)
+        return probs.cpu().numpy()
+    
+    # Create explainer and get explanation
     explainer = lime_image.LimeImageExplainer()
-    explanation = explainer.explain_instance np.array(image), 
-                                          lambda x: model(preprocess_image(Image.fromarray(x.astype('uint8'))).numpy(),
-                                          top_labels=3, 
-                                          hide_color=0, 
-                                          num_samples=1000)
-    temp, mask = explanation.get_image_and_mask(top_class, positive_only=True, num_features=5, hide_rest=False)
+    explanation = explainer.explain_instance(
+        image_np,
+        batch_predict,
+        top_labels=3,
+        hide_color=0,
+        num_samples=1000
+    )
+    
+    # Get explanation for the top class
+    temp, mask = explanation.get_image_and_mask(
+        top_class,
+        positive_only=True,
+        num_features=5,
+        hide_rest=False
+    )
     return temp, mask
 
 # Main app logic
